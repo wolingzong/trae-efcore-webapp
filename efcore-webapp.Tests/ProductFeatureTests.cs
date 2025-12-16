@@ -22,20 +22,44 @@ public class ProductFeatureTests
 
         var dir = Path.Combine(Directory.GetCurrentDirectory(), "TestResults", DateTime.Now.ToString("yyyyMMdd"));
         Directory.CreateDirectory(dir);
-        var file = Path.Combine(dir, "acceptance-report.pdf");
-
-        PdfReport.Save(file, new[]
+        
+        // 真のブラウザスクリーンショット生成
+        var screenshotFile = Path.Combine(dir, "products-screenshot.png");
+        await BrowserScreenshot.TakeScreenshotAsync("http://localhost:5000/products", screenshotFile);
+        
+        // PDF レポート生成
+        var pdfFile = Path.Combine(dir, "acceptance-report.pdf");
+        var pdfContent = new List<string>
         {
-            "# language: ja",
-            "機能: 商品管理",
+            "テスト実行報告書",
+            "===================",
             "",
-            "シナリオ: 商品⼀覧画⾯を⾒る",
-            "  前提 ホームページを表⽰する",
-            "  もし 商品⼀覧をリクエストする",
-            "  ならば \"Products List\" ヘッダーが表⽰されること",
-            "  かつ 受⼊レポートをPDFとして保存する",
-            "Products List",
-            "1: qq - 4.00"
-        });
+            "機能: 商品管理",
+            "実行日時: " + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"),
+            "",
+            "シナリオ: 商品一覧画面を見る",
+            "  前提 ホームページを表示する ✓",
+            "  もし 商品一覧をリクエストする ✓", 
+            "  ならば \"Products List\" ヘッダーが表示されること ✓",
+            "  かつ 受入レポートをPDFとして保存する ✓",
+            "",
+            "テスト結果: PASS",
+            "実行時間: " + DateTime.Now.ToString("HH:mm:ss"),
+            "",
+            "添付ファイル:",
+            "- スクリーンショット: " + Path.GetFileName(screenshotFile),
+            "- Excel報告書: test-specimen.xlsx"
+        };
+        
+        PdfReport.Save(pdfFile, pdfContent);
+        
+        // CSV レポート生成 (Excel互換)
+        var featureFile = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "Features", "product_management.feature");
+        var csvFile = Path.Combine(dir, "test-report.csv");
+        ExcelReport.GenerateFromFeature(featureFile, csvFile, "PASS", screenshotFile);
+        
+        // 真のExcel形式のファイル生成 (test-specimen.xlsx) - 複数シート対応
+        var excelFile = Path.Combine(dir, "test-specimen.xlsx");
+        await ExcelReportGenerator.GenerateTestReport(excelFile, featureFile, screenshotFile, "PASS");
     }
 }

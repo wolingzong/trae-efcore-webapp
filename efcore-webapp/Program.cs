@@ -12,6 +12,17 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
+    
+    // Add sample data if no products exist
+    if (!db.Products.Any())
+    {
+        db.Products.AddRange(
+            new Product { Name = "Laptop", Price = 999.99m },
+            new Product { Name = "Mouse", Price = 29.99m },
+            new Product { Name = "Keyboard", Price = 79.99m }
+        );
+        await db.SaveChangesAsync();
+    }
 }
 
 app.MapGet("/", () =>
@@ -29,14 +40,35 @@ app.MapGet("/", () =>
     return Results.Content(html, "text/html");
 });
 
-app.MapGet("/products", () =>
+app.MapGet("/products", async (AppDbContext db) =>
 {
-    var html = """
+    var products = await db.Products.ToListAsync();
+    var productRows = string.Join("", products.Select(p => 
+        $"<tr><td>{p.Id}</td><td>{p.Name}</td><td>${p.Price:F2}</td></tr>"));
+    
+    var html = $"""
     <!doctype html>
     <html>
     <head><meta charset="utf-8"><title>Products</title></head>
     <body>
       <h1>Products List</h1>
+      <a href="/">← Back to Home</a>
+      <h2>Add New Product</h2>
+      <form action="/products" method="post">
+        <input type="text" name="name" placeholder="Product Name" required>
+        <input type="number" name="price" step="0.01" placeholder="Price" required>
+        <button type="submit">Add Product</button>
+      </form>
+      <h2>Current Products</h2>
+      <table border="1" style="border-collapse: collapse; width: 100%;">
+        <thead>
+          <tr><th>ID</th><th>Name</th><th>Price</th></tr>
+        </thead>
+        <tbody>
+          {productRows}
+        </tbody>
+      </table>
+      {(products.Count == 0 ? "<p>No products found. Add some products above!</p>" : "")}
     </body>
     </html>
     """;
@@ -75,6 +107,34 @@ app.MapDelete("/todos/{id:int}", async (int id, AppDbContext db) =>
     db.Todos.Remove(todo);
     await db.SaveChangesAsync();
     return Results.NoContent();
+});
+
+// Products API
+app.MapGet("/api/products", async (AppDbContext db) => await db.Products.ToListAsync());
+
+app.MapPost("/products", async (HttpContext context, AppDbContext db) =>
+{
+    var form = await context.Request.ReadFormAsync();
+    var name = form["name"].ToString();
+    var priceStr = form["price"].ToString();
+    
+    if (string.IsNullOrEmpty(name) || !decimal.TryParse(priceStr, out var price))
+    {
+        return Results.BadRequest("Invalid product data");
+    }
+    
+    var product = new Product { Name = name, Price = price };
+    db.Products.Add(product);
+    await db.SaveChangesAsync();
+    
+    return Results.Redirect("/products");
+});
+
+app.MapPost("/api/products", async (Product product, AppDbContext db) =>
+{
+    db.Products.Add(product);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/products/{product.Id}", product);
 });
 
 app.Run();

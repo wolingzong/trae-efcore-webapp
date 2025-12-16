@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.7.1" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.7" />
+    <PackageReference Include="SkiaSharp" Version="2.88.6" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Features\**\*.feature" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Features\product_management.feature.cs" />
+    <Compile Remove="Steps\ProductSteps.cs" />
+  </ItemGroup>
+</Project>

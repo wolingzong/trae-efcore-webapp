@@ -1,0 +1,30 @@
+## OS
+.DS_Store
+
+## Build outputs
+bin/
+obj/
+
+## IDE
+.vs/
+.vscode/
+
+## User data
+app.db
+
+## ASP.NET Core
+wwwroot/*/bundle*
+
+## Tests artifacts
+efcore-webapp.Tests/bin/
+efcore-webapp.Tests/obj/
+efcore-webapp.Tests/**/TestResults/
+playwright-report/
+test-results/
+
+## NuGet
+packages/
+
+## Logs
+*.log
+

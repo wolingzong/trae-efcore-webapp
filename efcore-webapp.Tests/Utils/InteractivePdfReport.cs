@@ -23,9 +23,47 @@ public static class InteractivePdfReport
         using var pdf = new PdfDocument(writer);
         using var document = new Document(pdf);
         
-        // フォント設定
-        var normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
-        var boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+        // フォント設定 (日本語対応)
+        PdfFont normalFont;
+        PdfFont boldFont;
+        
+        try
+        {
+            // 日本語フォントを試行 (複数のフォントを試す)
+            var fontNames = new[] { "HeiseiKakuGo-W5", "KozMinPro-Regular", "MSGothic", "NotoSansCJK-Regular" };
+            var encodings = new[] { "UniJIS-UCS2-H", "Identity-H" };
+            
+            PdfFont? testFont = null;
+            foreach (var fontName in fontNames)
+            {
+                foreach (var encoding in encodings)
+                {
+                    try
+                    {
+                        testFont = PdfFontFactory.CreateFont(fontName, encoding);
+                        break;
+                    }
+                    catch { continue; }
+                }
+                if (testFont != null) break;
+            }
+            
+            if (testFont != null)
+            {
+                normalFont = testFont;
+                boldFont = testFont; // 同じフォントを使用
+            }
+            else
+            {
+                throw new Exception("No Japanese font available");
+            }
+        }
+        catch
+        {
+            // フォールバック: 標準フォント (ASCII文字のみ対応)
+            normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+            boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
+        }
         
         // ページ1: テスト結果サマリー
         CreateSummaryPage(document, scenarios, testResult, screenshotPath, normalFont, boldFont);
@@ -83,7 +121,7 @@ public static class InteractivePdfReport
     private static void CreateSummaryPage(Document document, List<ScenarioInfo> scenarios, string testResult, 
         string screenshotPath, PdfFont normalFont, PdfFont boldFont)
     {
-        // タイトル
+        // タイトル (フォントテスト付き)
         var title = new Paragraph("商品管理システム テスト実行報告書")
             .SetFont(boldFont)
             .SetFontSize(20)
@@ -91,6 +129,15 @@ public static class InteractivePdfReport
             .SetTextAlignment(TextAlignment.CENTER)
             .SetMarginBottom(20);
         document.Add(title);
+        
+        // フォント情報表示 (デバッグ用)
+        var fontInfo = new Paragraph($"使用フォント: {boldFont.GetFontProgram()?.GetFontNames()?.GetFontName() ?? "Unknown"}")
+            .SetFont(normalFont)
+            .SetFontSize(8)
+            .SetFontColor(ColorConstants.GRAY)
+            .SetTextAlignment(TextAlignment.CENTER)
+            .SetMarginBottom(10);
+        document.Add(fontInfo);
         
         // 実行情報
         var infoHeader = new Paragraph("実行情報")
@@ -120,12 +167,16 @@ public static class InteractivePdfReport
         document.Add(infoTable);
         document.Add(new Paragraph("\n"));
         
-        // テスト結果詳細
+        // テスト結果詳細 (リンクターゲット設定)
         var detailHeader = new Paragraph("テスト結果詳細")
             .SetFont(boldFont)
             .SetFontSize(16)
             .SetMarginBottom(10);
         document.Add(detailHeader);
+        
+        // 第1ページのテスト結果テーブルへのリンクターゲットを設定
+        var firstPageDestination = PdfExplicitDestination.CreateXYZ(document.GetPdfDocument().GetFirstPage(), 0, 600, 1);
+        document.GetPdfDocument().AddNamedDestination("test-results", firstPageDestination.GetPdfObject());
         
         var testTable = new Table(new float[] { 1, 6, 2, 3 }).UseAllAvailableWidth();
         testTable.SetBorder(new SolidBorder(1));
@@ -361,15 +412,25 @@ public static class InteractivePdfReport
             document.Add(pathInfo);
         }
         
-        // 戻りリンク
+        // 戻りリンク (テスト結果テーブルに直接ジャンプ)
         var backLink = new Paragraph()
             .Add(new Text("← テスト結果に戻る")
                 .SetFont(normalFont)
                 .SetFontColor(ColorConstants.BLUE)
                 .SetUnderline()
-                .SetAction(PdfAction.CreateGoTo(PdfExplicitDestination.CreateFit(document.GetPdfDocument().GetFirstPage()))))
+                .SetAction(PdfAction.CreateGoTo("test-results")))
             .SetMarginTop(20);
         document.Add(backLink);
+        
+        // 追加の戻りリンク (ページトップ)
+        var topLink = new Paragraph()
+            .Add(new Text("↑ ページトップに戻る")
+                .SetFont(normalFont)
+                .SetFontColor(ColorConstants.BLUE)
+                .SetUnderline()
+                .SetAction(PdfAction.CreateGoTo(PdfExplicitDestination.CreateFit(document.GetPdfDocument().GetFirstPage()))))
+            .SetMarginTop(10);
+        document.Add(topLink);
         
         // ページ番号
         var pageNumber = new Paragraph("ページ 3/3")

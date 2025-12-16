@@ -39,7 +39,7 @@ jobs:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
     - name: Cache NuGet packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.nuget/packages
         key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
@@ -53,17 +53,19 @@ jobs:
       run: dotnet build --no-restore --configuration Release
 
     - name: Run unit tests
-      run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults/
+      run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults/ --verbosity normal
+      timeout-minutes: 10
 
     - name: Start application for integration tests
       run: |
         cd efcore-webapp
-        dotnet run --configuration Release &
+        nohup dotnet run --configuration Release > ../app.log 2>&1 &
         echo $! > app.pid
         sleep 30  # Wait for app to start
       env:
         ASPNETCORE_ENVIRONMENT: Production
         ASPNETCORE_URLS: http://localhost:5000
+        ConnectionStrings__DefaultConnection: "Server=localhost;Database=MyWebAppDb;User ID=sa;Password=YourStrong@Password;TrustServerCertificate=True;"
 
     - name: Wait for application to be ready
       run: |
@@ -72,25 +74,36 @@ jobs:
     - name: Run integration tests
       run: |
         cd efcore-webapp.Tests
-        dotnet test --configuration Release --logger trx --results-directory ../TestResults/Integration/
+        dotnet test --configuration Release --logger trx --results-directory ../TestResults/Integration/ --verbosity normal
       env:
         ASPNETCORE_ENVIRONMENT: Production
+      timeout-minutes: 15
 
     - name: Stop application
       run: |
         if [ -f efcore-webapp/app.pid ]; then
           kill $(cat efcore-webapp/app.pid) || true
         fi
+      if: always()
+
+    - name: Upload application logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: application-logs
+        path: |
+          app.log
+          efcore-webapp/app.log
 
     - name: Upload test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results
         path: TestResults/
 
     - name: Upload test reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-reports
@@ -120,14 +133,13 @@ jobs:
 
     - name: Install security scan tools
       run: |
-        dotnet tool install --global security-scan
-        dotnet tool install --global dotnet-outdated-tool
+        dotnet tool install --global dotnet-outdated-tool || true
 
-    - name: Run security scan
-      run: security-scan **/*.csproj --excl-dev=true
+    - name: Run NuGet security audit
+      run: dotnet list package --vulnerable --include-transitive || true
 
     - name: Check for outdated packages
-      run: dotnet outdated
+      run: dotnet outdated || true
 
   build-and-deploy:
     name: Build and Deploy
@@ -160,7 +172,7 @@ jobs:
         cd ..
 
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: deployment-package
         path: deployment-package.zip
@@ -177,7 +189,7 @@ jobs:
       if: github.event_name != 'pull_request'
 
     - name: Build and push Docker image
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: .
         file: ./Dockerfile

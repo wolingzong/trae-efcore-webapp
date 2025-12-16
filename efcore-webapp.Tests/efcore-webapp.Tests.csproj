@@ -11,6 +11,8 @@
     <PackageReference Include="SkiaSharp" Version="2.88.6" />
     <PackageReference Include="EPPlus" Version="7.0.0" />
     <PackageReference Include="PuppeteerSharp" Version="19.0.0" />
+    <PackageReference Include="iText7" Version="8.0.2" />
+    <PackageReference Include="iText7.bouncy-castle-adapter" Version="8.0.2" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Features\**\*.feature" />

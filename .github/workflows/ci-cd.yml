@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  pull-requests: write
+
 env:
   DOTNET_VERSION: '9.0.x'
   NODE_VERSION: '18'
@@ -53,7 +59,7 @@ jobs:
       run: dotnet build --no-restore --configuration Release
 
     - name: Run unit tests
-      run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults/ --verbosity normal
+      run: dotnet test --no-build --configuration Release --logger "trx;LogFileName=unit-tests.trx" --results-directory TestResults/ --verbosity normal
       timeout-minutes: 10
 
     - name: Start application for integration tests
@@ -74,7 +80,7 @@ jobs:
     - name: Run integration tests
       run: |
         cd efcore-webapp.Tests
-        dotnet test --configuration Release --logger trx --results-directory ../TestResults/Integration/ --verbosity normal
+        dotnet test --configuration Release --logger "trx;LogFileName=integration-tests.trx" --results-directory ../TestResults/Integration/ --verbosity normal
       env:
         ASPNETCORE_ENVIRONMENT: Production
       timeout-minutes: 15
@@ -95,6 +101,13 @@ jobs:
           app.log
           efcore-webapp/app.log
 
+    - name: List test result files
+      if: always()
+      run: |
+        echo "Listing TestResults directory:"
+        find TestResults -name "*.trx" -type f 2>/dev/null || echo "No .trx files found"
+        ls -la TestResults/ 2>/dev/null || echo "TestResults directory not found"
+
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
@@ -109,13 +122,24 @@ jobs:
         name: test-reports
         path: efcore-webapp.Tests/bin/Debug/net9.0/TestResults/
 
-    - name: Publish test results
-      uses: dorny/test-reporter@v1
+    - name: Process test results
       if: always()
-      with:
-        name: Test Results
-        path: TestResults/**/*.trx
-        reporter: dotnet-trx
+      run: |
+        echo "=== Test Results Summary ==="
+        if find TestResults -name "*.trx" -type f | grep -q .; then
+          echo "✅ Test result files found:"
+          find TestResults -name "*.trx" -type f
+          echo "📊 Test execution completed"
+        else
+          echo "⚠️ No test result files found"
+        fi
+        
+        if find efcore-webapp.Tests/bin -name "TestResults" -type d | grep -q .; then
+          echo "📋 Generated test reports found:"
+          find efcore-webapp.Tests/bin -name "TestResults" -type d -exec ls -la {} \;
+        else
+          echo "ℹ️ No generated test reports found"
+        fi
 
   security-scan:
     name: Security Scan

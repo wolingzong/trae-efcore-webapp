@@ -27,31 +27,10 @@ public class ProductFeatureTests
         var screenshotFile = Path.Combine(dir, "products-screenshot.png");
         await BrowserScreenshot.TakeScreenshotAsync("http://localhost:5000/products", screenshotFile);
         
-        // PDF レポート生成
+        // 拡張PDF レポート生成 (スクリーンショット埋込み対応)
         var pdfFile = Path.Combine(dir, "acceptance-report.pdf");
-        var pdfContent = new List<string>
-        {
-            "テスト実行報告書",
-            "===================",
-            "",
-            "機能: 商品管理",
-            "実行日時: " + DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"),
-            "",
-            "シナリオ: 商品一覧画面を見る",
-            "  前提 ホームページを表示する ✓",
-            "  もし 商品一覧をリクエストする ✓", 
-            "  ならば \"Products List\" ヘッダーが表示されること ✓",
-            "  かつ 受入レポートをPDFとして保存する ✓",
-            "",
-            "テスト結果: PASS",
-            "実行時間: " + DateTime.Now.ToString("HH:mm:ss"),
-            "",
-            "添付ファイル:",
-            "- スクリーンショット: " + Path.GetFileName(screenshotFile),
-            "- Excel報告書: test-specimen.xlsx"
-        };
-        
-        PdfReport.Save(pdfFile, pdfContent);
+        var featureFilePath = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "Features", "product_management.feature");
+        EnhancedPdfReport.GenerateTestReport(pdfFile, featureFilePath, screenshotFile, "PASS");
         
         // CSV レポート生成 (Excel互換)
         var featureFile = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "Features", "product_management.feature");

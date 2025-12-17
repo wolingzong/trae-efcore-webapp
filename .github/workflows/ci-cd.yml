@@ -116,7 +116,7 @@ jobs:
         options: >-
           --memory=4g
           --cpus=2.0
-          --health-cmd="pgrep sqlservr"
+          --health-cmd="grep -q 'SQL Server is now ready for client connections' /var/opt/mssql/log/errorlog"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10

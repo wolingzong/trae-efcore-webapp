@@ -116,11 +116,11 @@ jobs:
         options: >-
           --memory=4g
           --cpus=2.0
-          --health-cmd="/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P MyStronger!Passw0rd2025 -Q 'SELECT 1'"
-          --health-interval=20s
-          --health-timeout=15s
-          --health-retries=20
-          --health-start-period=180s
+          --health-cmd="pgrep sqlservr"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=30s
 
     steps:
     - name: Checkout code

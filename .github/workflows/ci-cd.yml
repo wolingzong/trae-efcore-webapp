@@ -64,9 +64,7 @@ jobs:
         timeout 60 bash -c 'until curl -f http://localhost:5000; do sleep 2; done'
 
     - name: Run integration tests (SQLite)
-      run: |
-        cd efcore-webapp.Tests
-        dotnet test efcore-webapp.Tests.csproj --configuration Release --logger "trx;LogFileName=integration-tests-sqlite.trx" --results-directory ../TestResults/Integration/ --verbosity normal
+      run: dotnet test efcore-webapp.Tests/efcore-webapp.Tests.csproj --configuration Release --logger "trx;LogFileName=integration-tests-sqlite.trx" --results-directory TestResults/Integration/ --verbosity normal
       env:
         ASPNETCORE_ENVIRONMENT: Production
       timeout-minutes: 15
@@ -181,9 +179,7 @@ jobs:
         timeout 60 bash -c 'until curl -f http://localhost:5000; do sleep 2; done'
 
     - name: Run integration tests
-      run: |
-        cd efcore-webapp.Tests
-        dotnet test efcore-webapp.Tests.csproj --configuration Release --logger "trx;LogFileName=integration-tests.trx" --results-directory ../TestResults/Integration/ --verbosity normal
+      run: dotnet test efcore-webapp.Tests/efcore-webapp.Tests.csproj --configuration Release --logger "trx;LogFileName=integration-tests.trx" --results-directory TestResults/Integration/ --verbosity normal
       env:
         ASPNETCORE_ENVIRONMENT: Production
       timeout-minutes: 15

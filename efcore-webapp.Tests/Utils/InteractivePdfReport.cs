@@ -1,3 +1,4 @@
+using iText.IO.Font;
 using iText.IO.Font.Constants;
 using iText.IO.Image;
 using iText.Kernel.Colors;
@@ -9,6 +10,7 @@ using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
 using iText.Layout.Borders;
+using System.Net.Http;
 
 namespace EfCoreWebApp.Tests.Utils;
 
@@ -27,40 +29,18 @@ public static class InteractivePdfReport
         PdfFont normalFont;
         PdfFont boldFont;
         
+        // 日本語フォントを取得 (システムフォント優先)
         try
         {
-            // 日本語フォントを試行 (複数のフォントを試す)
-            var fontNames = new[] { "HeiseiKakuGo-W5", "KozMinPro-Regular", "MSGothic", "NotoSansCJK-Regular" };
-            var encodings = new[] { "UniJIS-UCS2-H", "Identity-H" };
-            
-            PdfFont? testFont = null;
-            foreach (var fontName in fontNames)
-            {
-                foreach (var encoding in encodings)
-                {
-                    try
-                    {
-                        testFont = PdfFontFactory.CreateFont(fontName, encoding);
-                        break;
-                    }
-                    catch { continue; }
-                }
-                if (testFont != null) break;
-            }
-            
-            if (testFont != null)
-            {
-                normalFont = testFont;
-                boldFont = testFont; // 同じフォントを使用
-            }
-            else
-            {
-                throw new Exception("No Japanese font available");
-            }
+            var fontPath = GetJapaneseFontPath();
+            normalFont = PdfFontFactory.CreateFont(fontPath, PdfEncodings.IDENTITY_H);
+            boldFont = PdfFontFactory.CreateFont(fontPath, PdfEncodings.IDENTITY_H);
+            Console.WriteLine($"日本語フォントを使用: {Path.GetFileName(fontPath)}");
         }
-        catch
+        catch (Exception ex)
         {
-            // フォールバック: 標準フォント (ASCII文字のみ対応)
+            // 最終フォールバック: 標準フォント (日本語は表示されないが、エラーを回避)
+            Console.WriteLine($"警告: 日本語フォントが見つかりませんでした ({ex.Message})。標準フォントを使用します。");
             normalFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
             boldFont = PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD);
         }
@@ -121,23 +101,23 @@ public static class InteractivePdfReport
     private static void CreateSummaryPage(Document document, List<ScenarioInfo> scenarios, string testResult, 
         string screenshotPath, PdfFont normalFont, PdfFont boldFont)
     {
-        // タイトル (フォントテスト付き)
-        var title = new Paragraph("商品管理システム テスト実行報告書")
+        // タイトル
+        var title = new Paragraph("商品管理システム - テスト実行報告書")
             .SetFont(boldFont)
             .SetFontSize(20)
             .SetFontColor(new DeviceRgb(0, 0, 139))
             .SetTextAlignment(TextAlignment.CENTER)
-            .SetMarginBottom(20);
+            .SetMarginBottom(30);
         document.Add(title);
         
-        // フォント情報表示 (デバッグ用)
-        var fontInfo = new Paragraph($"使用フォント: {boldFont.GetFontProgram()?.GetFontNames()?.GetFontName() ?? "Unknown"}")
+        // サブタイトル
+        var subtitle = new Paragraph("受入テストレポート")
             .SetFont(normalFont)
-            .SetFontSize(8)
+            .SetFontSize(12)
             .SetFontColor(ColorConstants.GRAY)
             .SetTextAlignment(TextAlignment.CENTER)
-            .SetMarginBottom(10);
-        document.Add(fontInfo);
+            .SetMarginBottom(20);
+        document.Add(subtitle);
         
         // 実行情報
         var infoHeader = new Paragraph("実行情報")
@@ -151,7 +131,7 @@ public static class InteractivePdfReport
         infoTable.AddCell(CreateCell(DateTime.Now.ToString("yyyy年MM月dd日 HH:mm:ss"), normalFont));
         
         infoTable.AddCell(CreateCell("総合結果:", normalFont, true));
-        var statusCell = CreateCell(testResult, boldFont);
+        var statusCell = CreateCell(testResult == "PASS" ? "合格" : "不合格", boldFont);
         statusCell.SetFontColor(testResult == "PASS" ? ColorConstants.GREEN : ColorConstants.RED);
         infoTable.AddCell(statusCell);
         
@@ -172,11 +152,13 @@ public static class InteractivePdfReport
             .SetFont(boldFont)
             .SetFontSize(16)
             .SetMarginBottom(10);
-        document.Add(detailHeader);
         
-        // 第1ページのテスト結果テーブルへのリンクターゲットを設定
-        var firstPageDestination = PdfExplicitDestination.CreateXYZ(document.GetPdfDocument().GetFirstPage(), 0, 600, 1);
-        document.GetPdfDocument().AddNamedDestination("test-results", firstPageDestination.GetPdfObject());
+        // リンクターゲットを設定 (現在位置)
+        var currentPage = document.GetPdfDocument().GetLastPage();
+        var testResultsDestination = PdfExplicitDestination.CreateXYZ(currentPage, 0, 500, 1);
+        document.GetPdfDocument().AddNamedDestination("test-results", testResultsDestination.GetPdfObject());
+        
+        document.Add(detailHeader);
         
         var testTable = new Table(new float[] { 1, 6, 2, 3 }).UseAllAvailableWidth();
         testTable.SetBorder(new SolidBorder(1));
@@ -201,7 +183,7 @@ public static class InteractivePdfReport
             for (int i = 0; i < scenario.Steps.Count; i++)
             {
                 var step = scenario.Steps[i];
-                var stepResult = testResult == "PASS" ? "✓ PASS" : "✗ FAIL";
+                var stepResult = testResult == "PASS" ? "✓ 合格" : "✗ 不合格";
                 var stepColor = testResult == "PASS" ? ColorConstants.GREEN : ColorConstants.RED;
                 
                 testTable.AddCell(CreateCell(stepNumber.ToString(), normalFont));
@@ -215,7 +197,7 @@ public static class InteractivePdfReport
                 if (i == 0 && File.Exists(screenshotPath))
                 {
                     var linkCell = new Cell();
-                    var linkText = new Text("📷 スクリーンショット")
+                    var linkText = new Text("[画面を表示]")
                         .SetFont(normalFont)
                         .SetFontColor(ColorConstants.BLUE)
                         .SetUnderline();
@@ -251,7 +233,7 @@ public static class InteractivePdfReport
         {
             var screenshotPara = new Paragraph()
                 .Add(new Text($"• スクリーンショット: {Path.GetFileName(screenshotPath)}").SetFont(normalFont))
-                .Add(new Text(" (ページ3で表示)")
+                .Add(new Text(" (3ページ目を参照)")
                     .SetFont(normalFont)
                     .SetFontColor(ColorConstants.BLUE)
                     .SetUnderline()
@@ -268,7 +250,7 @@ public static class InteractivePdfReport
         var pageNumber = new Paragraph("ページ 1/3")
             .SetFont(normalFont)
             .SetTextAlignment(TextAlignment.RIGHT)
-            .SetFixedPosition(500, 20, 100);
+            .SetFixedPosition(450, 20, 120);
         document.Add(pageNumber);
     }
     
@@ -335,16 +317,44 @@ public static class InteractivePdfReport
         document.Add(systemHeader);
         
         document.Add(new Paragraph("• テスト環境: GitHub Actions (Ubuntu)").SetFont(normalFont));
-        document.Add(new Paragraph("• .NET バージョン: 9.0").SetFont(normalFont));
+        document.Add(new Paragraph("• .NETバージョン: 9.0").SetFont(normalFont));
         document.Add(new Paragraph("• データベース: SQL Server / SQLite").SetFont(normalFont));
-        document.Add(new Paragraph("• ブラウザ: Chromium (Headless)").SetFont(normalFont));
+        document.Add(new Paragraph("• ブラウザ: Chromium (ヘッドレス)").SetFont(normalFont));
         document.Add(new Paragraph("• 実行時間: 約2-3分").SetFont(normalFont));
+        
+        // ナビゲーションリンク
+        document.Add(new Paragraph("\n"));
+        var navHeader = new Paragraph("ナビゲーション")
+            .SetFont(boldFont)
+            .SetFontSize(14)
+            .SetMarginBottom(10);
+        document.Add(navHeader);
+        
+        var backToSummary = new Paragraph()
+            .Add(new Text("← サマリーページに戻る")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetFontColor(ColorConstants.BLUE)
+                .SetUnderline()
+                .SetAction(PdfAction.CreateGoTo(PdfExplicitDestination.CreateFit(document.GetPdfDocument().GetFirstPage()))))
+            .SetMarginBottom(5);
+        document.Add(backToSummary);
+        
+        var goToScreenshot = new Paragraph()
+            .Add(new Text("→ スクリーンショットを表示")
+                .SetFont(normalFont)
+                .SetFontSize(12)
+                .SetFontColor(ColorConstants.BLUE)
+                .SetUnderline()
+                .SetAction(PdfAction.CreateGoTo("screenshot-page")))
+            .SetMarginBottom(10);
+        document.Add(goToScreenshot);
         
         // ページ番号
         var pageNumber = new Paragraph("ページ 2/3")
             .SetFont(normalFont)
             .SetTextAlignment(TextAlignment.RIGHT)
-            .SetFixedPosition(500, 20, 100);
+            .SetFixedPosition(450, 20, 120);
         document.Add(pageNumber);
     }
     
@@ -361,12 +371,12 @@ public static class InteractivePdfReport
             .SetMarginBottom(20);
         document.Add(title);
         
-        var info = new Paragraph($"撮影日時: {DateTime.Now:yyyy年MM月dd日 HH:mm:ss}")
+        var info = new Paragraph($"キャプチャ日時: {DateTime.Now:yyyy年MM月dd日 HH:mm:ss}")
             .SetFont(normalFont)
             .SetMarginBottom(5);
         document.Add(info);
         
-        var pageInfo = new Paragraph("画面: 商品一覧ページ (http://localhost:5000/products)")
+        var pageInfo = new Paragraph("ページ: 商品一覧 (http://localhost:5000/products)")
             .SetFont(normalFont)
             .SetMarginBottom(20);
         document.Add(pageInfo);
@@ -389,19 +399,19 @@ public static class InteractivePdfReport
             image.SetBorder(new SolidBorder(1));
             document.Add(image);
             
-            var imageInfo = new Paragraph($"\n画像サイズ: {image.GetImageWidth():F0} x {image.GetImageHeight():F0} pixels")
+            var imageInfo = new Paragraph($"\n画像サイズ: {image.GetImageWidth():F0} x {image.GetImageHeight():F0} ピクセル")
                 .SetFont(normalFont)
                 .SetFontSize(10);
             document.Add(imageInfo);
             
-            var fileInfo = new Paragraph($"ファイル: {Path.GetFileName(screenshotPath)}")
+            var fileInfo = new Paragraph($"ファイル名: {Path.GetFileName(screenshotPath)}")
                 .SetFont(normalFont)
                 .SetFontSize(10);
             document.Add(fileInfo);
         }
         catch (Exception ex)
         {
-            var errorMsg = new Paragraph($"スクリーンショット読み込みエラー: {ex.Message}")
+            var errorMsg = new Paragraph($"スクリーンショット読込エラー: {ex.Message}")
                 .SetFont(normalFont)
                 .SetFontColor(ColorConstants.RED);
             document.Add(errorMsg);
@@ -412,38 +422,61 @@ public static class InteractivePdfReport
             document.Add(pathInfo);
         }
         
-        // 戻りリンク (テスト結果テーブルに直接ジャンプ)
+        // 戻りリンクセクション
+        document.Add(new Paragraph("\n"));
+        
+        var linkHeader = new Paragraph("ナビゲーションリンク")
+            .SetFont(boldFont)
+            .SetFontSize(16)
+            .SetFontColor(new DeviceRgb(0, 0, 139))
+            .SetMarginBottom(15);
+        document.Add(linkHeader);
+        
+        // テスト結果に戻るリンク
         var backLink = new Paragraph()
             .Add(new Text("← テスト結果に戻る")
-                .SetFont(normalFont)
+                .SetFont(boldFont)
+                .SetFontSize(14)
                 .SetFontColor(ColorConstants.BLUE)
                 .SetUnderline()
                 .SetAction(PdfAction.CreateGoTo("test-results")))
-            .SetMarginTop(20);
+            .SetMarginBottom(10);
         document.Add(backLink);
         
-        // 追加の戻りリンク (ページトップ)
+        // ページトップに戻るリンク
         var topLink = new Paragraph()
-            .Add(new Text("↑ ページトップに戻る")
-                .SetFont(normalFont)
+            .Add(new Text("↑ レポートトップページに戻る")
+                .SetFont(boldFont)
+                .SetFontSize(14)
                 .SetFontColor(ColorConstants.BLUE)
                 .SetUnderline()
                 .SetAction(PdfAction.CreateGoTo(PdfExplicitDestination.CreateFit(document.GetPdfDocument().GetFirstPage()))))
-            .SetMarginTop(10);
+            .SetMarginBottom(10);
         document.Add(topLink);
+        
+        // 詳細ログページに移動するリンク
+        var detailLink = new Paragraph()
+            .Add(new Text("→ 詳細実行ログを表示")
+                .SetFont(boldFont)
+                .SetFontSize(14)
+                .SetFontColor(ColorConstants.BLUE)
+                .SetUnderline()
+                .SetAction(PdfAction.CreateGoTo(PdfExplicitDestination.CreateFit(document.GetPdfDocument().GetPage(2)))))
+            .SetMarginBottom(15);
+        document.Add(detailLink);
         
         // ページ番号
         var pageNumber = new Paragraph("ページ 3/3")
             .SetFont(normalFont)
             .SetTextAlignment(TextAlignment.RIGHT)
-            .SetFixedPosition(500, 20, 100);
+            .SetFixedPosition(450, 20, 120);
         document.Add(pageNumber);
     }
     
     private static Cell CreateCell(string content, PdfFont font, bool isBold = false)
     {
         var cell = new Cell()
-            .Add(new Paragraph(content).SetFont(isBold ? PdfFontFactory.CreateFont(StandardFonts.HELVETICA_BOLD) : font))
+            .Add(new Paragraph(content).SetFont(font))
             .SetBorder(new SolidBorder(1))
             .SetPadding(5);
         return cell;
@@ -457,6 +490,74 @@ public static class InteractivePdfReport
             .SetBorder(new SolidBorder(1))
             .SetPadding(5)
             .SetTextAlignment(TextAlignment.CENTER);
+    }
+    
+    
+    private static string GetJapaneseFontPath()
+    {
+        // 1. 直接尝试下载 Noto Sans JP (最可靠的方式)
+        var fontDir = Path.Combine(Path.GetTempPath(), "pdf-fonts");
+        Directory.CreateDirectory(fontDir);
+        
+        var notoFontPath = Path.Combine(fontDir, "NotoSansJP-Regular.ttf");
+        
+        // すでにダウンロード済みの場合は再利用
+        if (File.Exists(notoFontPath))
+        {
+            Console.WriteLine($"キャッシュされたフォントを使用: {Path.GetFileName(notoFontPath)}");
+            return notoFontPath;
+        }
+        
+        // 2. Noto Sans JPをダウンロードして使用
+        try
+        {
+            using var client = new HttpClient();
+            client.Timeout = TimeSpan.FromMinutes(2);
+            
+            // Noto Sans JP Regular の静的フォント (可変フォントではなく)
+            var fontUrl = "https://github.com/google/fonts/raw/main/ofl/notosansjp/static/NotoSansJP-Regular.ttf";
+            
+            Console.WriteLine("日本語フォント (Noto Sans JP) をダウンロード中...");
+            var fontBytes = client.GetByteArrayAsync(fontUrl).Result;
+            File.WriteAllBytes(notoFontPath, fontBytes);
+            Console.WriteLine($"フォントのダウンロードが完了しました: {Path.GetFileName(notoFontPath)}");
+            
+            return notoFontPath;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"フォントのダウンロードに失敗しました: {ex.Message}");
+            
+            // 3. フォールバック: システムフォントを試す（TTC形式対応）
+            var systemFontPaths = new[]
+            {
+                // macOS - TTC形式の場合は ",0" を追加してコレクション内の最初のフォントを指定
+                "/System/Library/Fonts/Hiragino Sans GB.ttc,0",
+                "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc,0",
+                "/System/Library/Fonts/Hiragino Kaku Gothic ProN.ttc,0",
+                
+                // その他のフォント
+                "/Library/Fonts/Arial Unicode.ttf",
+                "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+                
+                // Linux用
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc,0",
+                "/usr/share/fonts/truetype/noto/NotoSansJP-Regular.ttf"
+            };
+            
+            foreach (var pathWithIndex in systemFontPaths)
+            {
+                // ",0" を除いた実際のファイルパスを検証
+                var actualPath = pathWithIndex.Split(',')[0];
+                if (File.Exists(actualPath))
+                {
+                    Console.WriteLine($"システムフォントを使用: {Path.GetFileName(actualPath)}");
+                    return pathWithIndex; // TTC用の ",0" 付きパスを返す
+                }
+            }
+            
+            throw new Exception($"日本語フォントの取得に失敗しました: {ex.Message}");
+        }
     }
     
     private class ScenarioInfo

@@ -110,7 +110,18 @@ public static class TemplateBasedPowerPointGenerator
             new SlideIdList(),
             new SlideSize { Cx = 9144000, Cy = 6858000 },
             new NotesSize { Cx = 6858000, Cy = 6858000 },
-            new P.DefaultTextStyle()
+            new P.DefaultTextStyle(
+                new A.DefaultParagraphProperties(),
+                new A.Level1ParagraphProperties { Alignment = A.TextAlignmentTypeValues.Left, DefaultTabSize = 914400, RightToLeft = false, EastAsianLineBreak = true, LatinLineBreak = false, Height = true },
+                new A.Level2ParagraphProperties { Alignment = A.TextAlignmentTypeValues.Left, DefaultTabSize = 914400, RightToLeft = false, EastAsianLineBreak = true, LatinLineBreak = false, Height = true },
+                new A.Level3ParagraphProperties { Alignment = A.TextAlignmentTypeValues.Left, DefaultTabSize = 914400, RightToLeft = false, EastAsianLineBreak = true, LatinLineBreak = false, Height = true },
+                new A.Level4ParagraphProperties { Alignment = A.TextAlignmentTypeValues.Left, DefaultTabSize = 914400, RightToLeft = false, EastAsianLineBreak = true, LatinLineBreak = false, Height = true },
+                new A.Level5ParagraphProperties { Alignment = A.TextAlignmentTypeValues.Left, DefaultTabSize = 914400, RightToLeft = false, EastAsianLineBreak = true, LatinLineBreak = false, Height = true },
+                new A.Level6ParagraphProperties { Alignment = A.TextAlignmentTypeValues.Left, DefaultTabSize = 914400, RightToLeft = false, EastAsianLineBreak = true, LatinLineBreak = false, Height = true },
+                new A.Level7ParagraphProperties { Alignment = A.TextAlignmentTypeValues.Left, DefaultTabSize = 914400, RightToLeft = false, EastAsianLineBreak = true, LatinLineBreak = false, Height = true },
+                new A.Level8ParagraphProperties { Alignment = A.TextAlignmentTypeValues.Left, DefaultTabSize = 914400, RightToLeft = false, EastAsianLineBreak = true, LatinLineBreak = false, Height = true },
+                new A.Level9ParagraphProperties { Alignment = A.TextAlignmentTypeValues.Left, DefaultTabSize = 914400, RightToLeft = false, EastAsianLineBreak = true, LatinLineBreak = false, Height = true }
+            )
         );
         
         var slideIdList = presentationPart.Presentation.SlideIdList!;

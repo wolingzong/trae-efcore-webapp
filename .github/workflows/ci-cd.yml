@@ -339,7 +339,7 @@ jobs:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
     - name: Install NBomber
-      run: dotnet add efcore-webapp.Tests package NBomber --version 5.0.0
+      run: dotnet add efcore-webapp.Tests/efcore-webapp.Tests.csproj package NBomber --version 5.0.0
 
     - name: Run performance tests
       run: |

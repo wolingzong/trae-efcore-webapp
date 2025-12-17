@@ -10,7 +10,8 @@ public class ProductFeatureTests
     [Fact]
     public async Task 商品一覧画面を見る_ヘッダー表示とPDF保存()
     {
-        var client = new HttpClient { BaseAddress = new Uri("http://localhost:5000") };
+        var baseUrl = Environment.GetEnvironmentVariable("TEST_BASE_URL") ?? "http://localhost:5000";
+        var client = new HttpClient { BaseAddress = new Uri(baseUrl) };
 
         var home = await client.GetAsync("/");
         home.EnsureSuccessStatusCode();
@@ -25,7 +26,7 @@ public class ProductFeatureTests
         
         // 真のブラウザスクリーンショット生成
         var screenshotFile = Path.Combine(dir, "products-screenshot.png");
-        await BrowserScreenshot.TakeScreenshotAsync("http://localhost:5000/products", screenshotFile);
+        await BrowserScreenshot.TakeScreenshotAsync($"{baseUrl}/products", screenshotFile);
         
         // インタラクティブPDF レポート生成 (クリック可能リンク対応)
         var pdfFile = Path.Combine(dir, "acceptance-report.pdf");

@@ -3,6 +3,7 @@ using DocumentFormat.OpenXml.Presentation;
 using DocumentFormat.OpenXml;
 using A = DocumentFormat.OpenXml.Drawing;
 using P = DocumentFormat.OpenXml.Presentation;
+using System.IO.Compression;
 
 namespace EfCoreWebApp.Tests.Utils;
 
@@ -23,6 +24,51 @@ public static class TemplateBasedPowerPointGenerator
         CreateMinimalPresentation(presentationPart, scenarios, testResult, screenshotPath);
         
         presentationPart.Presentation.Save();
+        presentationDocument.Dispose(); // Close document before accessing as zip
+        
+        // Post-process to fix relationships for WPS compatibility
+        FixPowerPointRelationships(pptPath);
+    }
+
+    private static void FixPowerPointRelationships(string pptPath)
+    {
+        // WPS Office compatibility fix: Ensure relationships use relative paths
+        // OpenXML SDK tends to generate absolute paths (Target="/ppt/slides/slide1.xml")
+        // which WPS Presentation fails to resolve correctly in some cases.
+        // We manually rewrite them to be relative (Target="slides/slide1.xml").
+        
+        try 
+        {
+            using var archive = ZipFile.Open(pptPath, ZipArchiveMode.Update);
+            var entry = archive.GetEntry("ppt/_rels/presentation.xml.rels");
+            if (entry != null)
+            {
+                string content;
+                using (var stream = entry.Open())
+                using (var reader = new StreamReader(stream))
+                {
+                    content = reader.ReadToEnd();
+                }
+
+                // Replace absolute paths starting with /ppt/ with relative paths
+                if (content.Contains("Target=\"/ppt/"))
+                {
+                    content = content.Replace("Target=\"/ppt/", "Target=\"");
+                    
+                    entry.Delete();
+                    var newEntry = archive.CreateEntry("ppt/_rels/presentation.xml.rels");
+                    using (var stream = newEntry.Open())
+                    using (var writer = new StreamWriter(stream))
+                    {
+                        writer.Write(content);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Failed to apply WPS compatibility fix: {ex.Message}");
+        }
     }
     
     private static void CreateMinimalPresentation(PresentationPart presentationPart, List<ScenarioInfo> scenarios, string testResult, string screenshotPath)

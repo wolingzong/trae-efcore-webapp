@@ -32,8 +32,8 @@ public static class WordReportGenerator
         
         // テスト結果詳細 (ブックマーク付き)
         var detailHeading = new Paragraph();
-        var detailBookmarkStart = new BookmarkStart { Id = "2", Name = "test-results" };
-        var detailBookmarkEnd = new BookmarkEnd { Id = "2" };
+        var detailBookmarkStart = new BookmarkStart { Id = "100", Name = "test-results" };
+        var detailBookmarkEnd = new BookmarkEnd { Id = "100" };
         
         detailHeading.AppendChild(detailBookmarkStart);
         var detailRun = detailHeading.AppendChild(new Run());
@@ -57,8 +57,8 @@ public static class WordReportGenerator
         if (File.Exists(screenshotPath))
         {
             var screenshotHeading = new Paragraph();
-            var bookmarkStart = new BookmarkStart { Id = "1", Name = "screenshot" };
-            var bookmarkEnd = new BookmarkEnd { Id = "1" };
+            var bookmarkStart = new BookmarkStart { Id = "200", Name = "screenshot" };
+            var bookmarkEnd = new BookmarkEnd { Id = "200" };
             
             screenshotHeading.AppendChild(bookmarkStart);
             var run = screenshotHeading.AppendChild(new Run());
@@ -79,7 +79,7 @@ public static class WordReportGenerator
             
             // 戻りリンクを追加
             var returnPara = new Paragraph();
-            var returnHyperlink = new Hyperlink { Anchor = "test-results" };
+            var returnHyperlink = new Hyperlink { Anchor = "test-results", History = true };
             var returnRun = returnHyperlink.AppendChild(new Run());
             var returnProps = returnRun.AppendChild(new RunProperties());
             returnProps.AppendChild(new Color { Val = "0000FF" });
@@ -335,7 +335,7 @@ public static class WordReportGenerator
                     {
                         var linkCell = new TableCell();
                         var linkPara = linkCell.AppendChild(new Paragraph());
-                        var hyperlink = new Hyperlink { Anchor = "screenshot" };
+                        var hyperlink = new Hyperlink { Anchor = "screenshot", History = true };
                         var linkRun = hyperlink.AppendChild(new Run());
                         var linkProps = linkRun.AppendChild(new RunProperties());
                         linkProps.AppendChild(new Color { Val = "0000FF" });

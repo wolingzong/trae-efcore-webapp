@@ -1,14 +1,67 @@
+using System.Diagnostics;
+
 namespace EfCoreWebApp.Tests.Utils;
 
 public static class MermaidDiagramGenerator
 {
-    public static void GenerateDiagram(string mermaidPath, string featureFilePath)
+    public static async Task GenerateDiagramAsync(string mermaidPath, string featureFilePath)
     {
         var featureContent = File.ReadAllText(featureFilePath);
         var feature = ParseFeatureFile(featureContent);
         
         var mermaidCode = GenerateMermaidCode(feature);
         File.WriteAllText(mermaidPath, mermaidCode);
+        
+        // Convert to SVG (Visio Compatible) using Playwright
+        var svgPath = Path.ChangeExtension(mermaidPath, ".svg");
+        await ConvertToSvgAsync(mermaidCode, svgPath);
+    }
+    
+    private static async Task ConvertToSvgAsync(string mermaidCode, string svgPath)
+    {
+        try 
+        {
+            var htmlContent = $@"
+<!DOCTYPE html>
+<html>
+<body>
+    <div class=""mermaid"">
+{mermaidCode}
+    </div>
+    <script type=""module"">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({{ startOnLoad: true }});
+    </script>
+</body>
+</html>";
+
+            var tempHtmlPath = Path.Combine(Path.GetTempPath(), $"mermaid_{Guid.NewGuid()}.html");
+            File.WriteAllText(tempHtmlPath, htmlContent);
+
+            using var playwright = await Microsoft.Playwright.Playwright.CreateAsync();
+            await using var browser = await playwright.Chromium.LaunchAsync(new Microsoft.Playwright.BrowserTypeLaunchOptions { Headless = true });
+            var page = await browser.NewPageAsync();
+            
+            await page.GotoAsync($"file://{tempHtmlPath}");
+            
+            // Wait for mermaid to generate the SVG
+            await page.WaitForSelectorAsync(".mermaid svg");
+            
+            // Extract the SVG content
+            var svgContent = await page.Locator(".mermaid").InnerHTMLAsync();
+            
+            // Clean up the SVG for standalone file (optional but good practice)
+            // Sometimes innerHTML includes the div wrapper or extra stuff, but .mermaid innerHTML usually gives the <svg>...
+            
+            File.WriteAllText(svgPath, svgContent);
+            
+            // Cleanup
+            if (File.Exists(tempHtmlPath)) File.Delete(tempHtmlPath);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SVG conversion failed: {ex.Message}");
+        }
     }
     
     private static FeatureInfo ParseFeatureFile(string featureContent)

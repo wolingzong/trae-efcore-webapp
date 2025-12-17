@@ -382,3 +382,7 @@ TestResults/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Test Utils
+efcore-webapp.Tests/ffmpeg
+efcore-webapp.Tests/ffmpeg.zip

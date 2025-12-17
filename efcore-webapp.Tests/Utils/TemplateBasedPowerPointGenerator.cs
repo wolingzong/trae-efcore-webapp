@@ -73,15 +73,12 @@ public static class TemplateBasedPowerPointGenerator
     
     private static void CreateMinimalPresentation(PresentationPart presentationPart, List<ScenarioInfo> scenarios, string testResult, string screenshotPath)
     {
-        // 1. Create Slide Master and Layout (Required by WPS)
+        // 1. Create Slide Master, Layout, and Theme (Required by WPS)
         var slideMasterPart = presentationPart.AddNewPart<SlideMasterPart>();
-        
-        // 1.1 Create Theme (Critical for WPS compatibility)
         CreateTheme(slideMasterPart);
-        
         var slideLayoutPart = slideMasterPart.AddNewPart<SlideLayoutPart>();
         
-        // Setup Master content (minimal but valid)
+        // Setup Master content
         slideMasterPart.SlideMaster = new SlideMaster(
             new CommonSlideData(new ShapeTree(
                 new P.NonVisualGroupShapeProperties(
@@ -131,18 +128,37 @@ public static class TemplateBasedPowerPointGenerator
         var slideIdList = presentationPart.Presentation.SlideIdList!;
         uint slideId = 256U;
         
-        // 3. Create Slides (Must maintain relationship to Layout)
+        // --- 3. Pre-create Screenshot Slide Part if needed (to allow linking) ---
+        SlidePart? screenshotSlidePart = null;
+        if (File.Exists(screenshotPath))
+        {
+            screenshotSlidePart = presentationPart.AddNewPart<SlidePart>();
+            CreateImageSlideContent(presentationPart, screenshotSlidePart, slideLayoutPart, "スクリーンショット", screenshotPath);
+        }
+
+        // --- 4. Create Slides Sequence ---
+        
+        // 4.1 Title Slide
         CreateSimpleSlide(presentationPart, slideLayoutPart, slideIdList, ref slideId, 
             $"商品管理システム\nテスト実行報告書\n\n{(testResult == "PASS" ? "✓ テスト合格" : "✗ テスト不合格")}\n{DateTime.Now:yyyy年MM月dd日}");
         
+        // 4.2 Summary Slide
         CreateSimpleSlide(presentationPart, slideLayoutPart, slideIdList, ref slideId,
             $"テスト結果サマリー\n\n総合結果: {(testResult == "PASS" ? "合格" : "不合格")}\n総シナリオ数: {scenarios.Count}\n総ステップ数: {scenarios.Sum(s => s.Steps.Count)}\n\nテスト環境: GitHub Actions\n.NET: 9.0");
         
-        if (File.Exists(screenshotPath))
+        // 4.3 Detail Slides (Iterate Scenarios)
+        foreach (var scenario in scenarios)
         {
-            CreateImageSlide(presentationPart, slideLayoutPart, slideIdList, ref slideId, "スクリーンショット", screenshotPath);
+           CreateScenarioDetailSlide(presentationPart, slideLayoutPart, slideIdList, ref slideId, scenario, screenshotSlidePart);
+        }
+
+        // 4.4 Screenshot Slide (Append to ID list now)
+        if (screenshotSlidePart != null)
+        {
+             slideIdList.AppendChild(new SlideId { Id = slideId++, RelationshipId = presentationPart.GetIdOfPart(screenshotSlidePart) });
         }
         
+        // 4.5 System Info Slide
         CreateSimpleSlide(presentationPart, slideLayoutPart, slideIdList, ref slideId,
             "システム情報\n\n・テスト環境: GitHub Actions (Ubuntu)\n・.NETバージョン: 9.0\n・データベース: SQL Server / SQLite\n・ブラウザ: Chromium\n・実行時間: 約2-3分");
     }
@@ -232,10 +248,82 @@ public static class TemplateBasedPowerPointGenerator
         slidePart.Slide.Save();
     }
     
-    private static void CreateImageSlide(PresentationPart presentationPart, SlideLayoutPart layoutPart, SlideIdList slideIdList, ref uint slideId, string title, string imagePath)
+    private static void CreateScenarioDetailSlide(PresentationPart presentationPart, SlideLayoutPart layoutPart, SlideIdList slideIdList, ref uint slideId, ScenarioInfo scenario, SlidePart? screenshotPart)
     {
         var slidePart = presentationPart.AddNewPart<SlidePart>();
-        slidePart.AddPart(layoutPart); // Link to Layout
+        slidePart.AddPart(layoutPart);
+        
+        var shapeTree = new ShapeTree(
+            new P.NonVisualGroupShapeProperties(
+                new P.NonVisualDrawingProperties { Id = 1U, Name = "" },
+                new P.NonVisualGroupShapeDrawingProperties(),
+                new ApplicationNonVisualDrawingProperties()),
+            new GroupShapeProperties());
+
+        // Title
+        AddTextBox(shapeTree, 2, $"シナリオ: {scenario.Name}", 457200, 274638, 8229600, 1143000, 2800, true);
+
+        // Steps Body
+        long yOffset = 1600000;
+        foreach (var step in scenario.Steps)
+        {
+            // Add step text
+            AddTextBox(shapeTree, 3, step, 457200, yOffset, 6000000, 400000, 1800, false);
+            
+            // Add "[View Screenshot]" link if screenshot exists
+            if (screenshotPart != null)
+            {
+                // Create relationship
+                var relId = slidePart.AddHyperlinkRelationship(new Uri( "#" + screenshotPart.Uri.ToString().Split('/').Last(), UriKind.Relative), true).Id;
+                 
+                // Note: Internal linking in OpenXML is complex. 
+                // We'll use a standardized method similar to how Word links operate but for PPT.
+                // Or simpler: Just a text box with a click action.
+                
+                var shape = new P.Shape(
+                    new P.NonVisualShapeProperties(
+                        new P.NonVisualDrawingProperties { Id = 4U, Name = "Link" },
+                        new P.NonVisualShapeDrawingProperties(new A.ShapeLocks { NoGrouping = true }),
+                        new ApplicationNonVisualDrawingProperties()),
+                    new P.ShapeProperties(
+                        new A.Transform2D(
+                            new A.Offset { X = 7000000L, Y = yOffset },
+                            new A.Extents { Cx = 1500000L, Cy = 400000L }),
+                        new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle },
+                        new A.SolidFill(new A.RgbColorModelHex { Val = "FFFFFF" }), // White background
+                         new A.Outline(new A.NoFill())
+                    ),
+                    new P.TextBody(
+                        new A.BodyProperties(),
+                        new A.ListStyle(),
+                        new A.Paragraph(
+                            new A.Run(
+                                new A.RunProperties(
+                                    new A.SolidFill(new A.RgbColorModelHex { Val = "0000FF" })
+                                ) { Language = "ja-JP", FontSize = 1600, Underline = A.TextUnderlineValues.Single },
+                                new A.Text("[画面を表示]"),
+                                new A.HyperlinkOnClick { Id = relId, Action = "ppaction://hlinksldjump" }
+                            )
+                        )
+                    )
+                );
+                shapeTree.AppendChild(shape);
+            }
+            
+            yOffset += 500000;
+        }
+
+        slidePart.Slide = new Slide(
+            new CommonSlideData(shapeTree),
+            new P.ColorMapOverride(new A.MasterColorMapping())
+        );
+        slideIdList.AppendChild(new SlideId { Id = slideId++, RelationshipId = presentationPart.GetIdOfPart(slidePart) });
+        slidePart.Slide.Save();
+    }
+
+    private static void CreateImageSlideContent(PresentationPart presentationPart, SlidePart slidePart, SlideLayoutPart layoutPart, string title, string imagePath)
+    {
+        slidePart.AddPart(layoutPart);
         
         var shapeTree = new ShapeTree(
             new P.NonVisualGroupShapeProperties(
@@ -246,26 +334,7 @@ public static class TemplateBasedPowerPointGenerator
         );
         
         // Add title
-        shapeTree.AppendChild(new P.Shape(
-            new P.NonVisualShapeProperties(
-                new P.NonVisualDrawingProperties { Id = 2U, Name = "Title" },
-                new P.NonVisualShapeDrawingProperties(new A.ShapeLocks { NoGrouping = true }),
-                new ApplicationNonVisualDrawingProperties()),
-            new P.ShapeProperties(
-                new A.Transform2D(
-                    new A.Offset { X = 457200L, Y = 274638L },
-                    new A.Extents { Cx = 8229600L, Cy = 1143000L })),
-            new P.TextBody(
-                new A.BodyProperties(),
-                new A.ListStyle(),
-                new A.Paragraph(
-                    new A.Run(
-                        new A.RunProperties { Language = "ja-JP", FontSize = 2800 },
-                        new A.Text(title)
-                    )
-                )
-            )
-        ));
+        AddTextBox(shapeTree, 2, title, 457200, 274638, 8229600, 1143000, 2800, true);
         
         // Add image
         try
@@ -290,6 +359,38 @@ public static class TemplateBasedPowerPointGenerator
                         new A.Extents { Cx = 8000000L, Cy = 4500000L }),
                     new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle })
             ));
+            
+            // Add "Back" link (Action: Last Slide Viewed)
+            // ppaction://hlinklastslide is the standard action for "Last Slide Viewed"
+            var backRelId = slidePart.AddHyperlinkRelationship(new Uri("ppaction://hlinklastslide", UriKind.Absolute), true).Id;
+            
+            var backShape = new P.Shape(
+                new P.NonVisualShapeProperties(
+                    new P.NonVisualDrawingProperties { Id = 4U, Name = "BackLink" },
+                    new P.NonVisualShapeDrawingProperties(new A.ShapeLocks { NoGrouping = true }),
+                    new ApplicationNonVisualDrawingProperties()),
+                new P.ShapeProperties(
+                    new A.Transform2D(
+                        new A.Offset { X = 1000000L, Y = 1000000L }, // Positioned above image
+                        new A.Extents { Cx = 3000000L, Cy = 500000L }),
+                    new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle },
+                    new A.NoFill()
+                ),
+                new P.TextBody(
+                    new A.BodyProperties(),
+                    new A.ListStyle(),
+                    new A.Paragraph(
+                        new A.Run(
+                            new A.RunProperties(
+                                new A.SolidFill(new A.RgbColorModelHex { Val = "0000FF" })
+                            ) { Language = "ja-JP", FontSize = 1600, Underline = A.TextUnderlineValues.Single },
+                            new A.Text("← 元の画面に戻る"),
+                            new A.HyperlinkOnClick { Id = backRelId, Action = "ppaction://hlinklastslide" }
+                        )
+                    )
+                )
+            );
+            shapeTree.AppendChild(backShape);
         }
         catch
         {
@@ -301,8 +402,39 @@ public static class TemplateBasedPowerPointGenerator
             new P.ColorMapOverride(new A.MasterColorMapping())
         );
         
-        slideIdList.AppendChild(new SlideId { Id = slideId++, RelationshipId = presentationPart.GetIdOfPart(slidePart) });
         slidePart.Slide.Save();
+    }
+    
+    // Helper to replace AddTextBox (since it was missing in snippet or implied)
+    private static void AddTextBox(ShapeTree shapeTree, uint id, string text, long x, long y, long cx, long cy, int fontSize, bool isBold, string color = "000000", string align = "left")
+    {
+         var shape = new P.Shape(
+             new P.NonVisualShapeProperties(
+                 new P.NonVisualDrawingProperties { Id = id, Name = "TextBox" },
+                 new P.NonVisualShapeDrawingProperties(new A.ShapeLocks { NoGrouping = true }),
+                 new ApplicationNonVisualDrawingProperties()),
+             new P.ShapeProperties(
+                 new A.Transform2D(
+                     new A.Offset { X = x, Y = y },
+                     new A.Extents { Cx = cx, Cy = cy }),
+                 new A.PresetGeometry(new A.AdjustValueList()) { Preset = A.ShapeTypeValues.Rectangle },
+                 new A.NoFill()
+             ),
+             new P.TextBody(
+                 new A.BodyProperties(),
+                 new A.ListStyle(),
+                 new A.Paragraph(
+                     new A.ParagraphProperties { Alignment = align == "center" ? A.TextAlignmentTypeValues.Center : A.TextAlignmentTypeValues.Left },
+                     new A.Run(
+                         new A.RunProperties(
+                            new A.SolidFill(new A.RgbColorModelHex { Val = color })
+                         ) { Language = "ja-JP", FontSize = fontSize, Bold = isBold },
+                         new A.Text(text)
+                     )
+                 )
+             )
+         );
+         shapeTree.AppendChild(shape);
     }
     
     private static List<ScenarioInfo> ParseFeatureFile(string featureContent)

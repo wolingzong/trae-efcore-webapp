@@ -52,6 +52,14 @@ public class ProductFeatureTests
         
         // Mermaid 階層図生成 (.mmd形式)
         var mermaidFile = Path.Combine(dir, "test-hierarchy.mmd");
-        MermaidDiagramGenerator.GenerateDiagram(mermaidFile, featureFile);
+        await MermaidDiagramGenerator.GenerateDiagramAsync(mermaidFile, featureFile);
+        
+        // Visio (Native VDX) 階層図生成
+        var vdxFile = Path.Combine(dir, "test-hierarchy.vdx");
+        VisioReportGenerator.GenerateDiagram(vdxFile, featureFile);
+        
+        // 動画記録 (Playwright)
+        var videoFile = Path.Combine(dir, "acceptance-test.mp4");
+        await VideoRecorder.RecordAcceptanceScenarioAsync(baseUrl, videoFile);
     }
 }

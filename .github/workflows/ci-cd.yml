@@ -51,7 +51,7 @@ jobs:
     - name: Start application for integration tests (SQLite)
       run: |
         cd efcore-webapp
-        nohup dotnet run --configuration Release > ../app.log 2>&1 &
+        nohup dotnet run --project EfCoreWebApp.csproj --configuration Release > ../app.log 2>&1 &
         echo $! > app.pid
         sleep 20  # Wait for app to start
       env:
@@ -66,7 +66,7 @@ jobs:
     - name: Run integration tests (SQLite)
       run: |
         cd efcore-webapp.Tests
-        dotnet test --configuration Release --logger "trx;LogFileName=integration-tests-sqlite.trx" --results-directory ../TestResults/Integration/ --verbosity normal
+        dotnet test efcore-webapp.Tests.csproj --configuration Release --logger "trx;LogFileName=integration-tests-sqlite.trx" --results-directory ../TestResults/Integration/ --verbosity normal
       env:
         ASPNETCORE_ENVIRONMENT: Production
       timeout-minutes: 15
@@ -169,7 +169,7 @@ jobs:
           echo "SQL Server not available, using SQLite"
           export ConnectionStrings__DefaultConnection="Data Source=app.db"
         fi
-        nohup dotnet run --configuration Release > ../app.log 2>&1 &
+        nohup dotnet run --project EfCoreWebApp.csproj --configuration Release > ../app.log 2>&1 &
         echo $! > app.pid
         sleep 30  # Wait for app to start
       env:
@@ -183,7 +183,7 @@ jobs:
     - name: Run integration tests
       run: |
         cd efcore-webapp.Tests
-        dotnet test --configuration Release --logger "trx;LogFileName=integration-tests.trx" --results-directory ../TestResults/Integration/ --verbosity normal
+        dotnet test efcore-webapp.Tests.csproj --configuration Release --logger "trx;LogFileName=integration-tests.trx" --results-directory ../TestResults/Integration/ --verbosity normal
       env:
         ASPNETCORE_ENVIRONMENT: Production
       timeout-minutes: 15

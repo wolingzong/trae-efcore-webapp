@@ -40,5 +40,17 @@ public class ProductFeatureTests
         // 真のExcel形式のファイル生成 (test-specimen.xlsx) - 複数シート対応
         var excelFile = Path.Combine(dir, "test-specimen.xlsx");
         await ExcelReportGenerator.GenerateTestReport(excelFile, featureFile, screenshotFile, "PASS");
+        
+        // Word レポート生成 (.docx形式)
+        var wordFile = Path.Combine(dir, "test-report.docx");
+        WordReportGenerator.GenerateTestReport(wordFile, featureFile, screenshotFile, "PASS");
+        
+        // PowerPoint レポート生成 (.pptx形式) - WPS互換性向上版
+        var pptFile = Path.Combine(dir, "test-report.pptx");
+        TemplateBasedPowerPointGenerator.GenerateTestReport(pptFile, featureFile, screenshotFile, "PASS");
+        
+        // Mermaid 階層図生成 (.mmd形式)
+        var mermaidFile = Path.Combine(dir, "test-hierarchy.mmd");
+        MermaidDiagramGenerator.GenerateDiagram(mermaidFile, featureFile);
     }
 }

@@ -53,10 +53,10 @@ jobs:
         cd efcore-webapp
         nohup dotnet run --project EfCoreWebApp.csproj --configuration Release > ../app.log 2>&1 &
         echo $! > app.pid
-        sleep 20  # Wait for app to start
+        sleep 30  # Wait for app to start
       env:
         ASPNETCORE_ENVIRONMENT: Production
-        ASPNETCORE_URLS: http://localhost:5000
+        ASPNETCORE_URLS: http://0.0.0.0:5000
         ConnectionStrings__DefaultConnection: "Data Source=app.db"
 
     - name: Wait for application to be ready
@@ -174,7 +174,7 @@ jobs:
         sleep 30  # Wait for app to start
       env:
         ASPNETCORE_ENVIRONMENT: Production
-        ASPNETCORE_URLS: http://localhost:5000
+        ASPNETCORE_URLS: http://0.0.0.0:5000
 
     - name: Wait for application to be ready
       run: |

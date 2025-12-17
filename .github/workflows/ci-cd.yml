@@ -110,19 +110,19 @@ jobs:
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
-          SA_PASSWORD: YourStrong@Password
+          SA_PASSWORD: MyStronger!Passw0rd2025
           ACCEPT_EULA: Y
           MSSQL_PID: Express
         ports:
           - 1433:1433
         options: >-
-          --memory=2g
-          --cpus=1.0
-          --health-cmd="/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Password -Q 'SELECT 1'"
+          --memory=4g
+          --cpus=2.0
+          --health-cmd="/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P MyStronger!Passw0rd2025 -Q 'SELECT 1'"
           --health-interval=15s
           --health-timeout=10s
-          --health-retries=5
-          --health-start-period=30s
+          --health-retries=10
+          --health-start-period=60s
 
     steps:
     - name: Checkout code
@@ -152,7 +152,7 @@ jobs:
         echo "Checking SQL Server container status..."
         docker ps -a
         echo "Checking SQL Server health..."
-        timeout 60 bash -c 'until docker exec $(docker ps -q -f "ancestor=mcr.microsoft.com/mssql/server:2022-latest") /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Password -Q "SELECT 1" 2>/dev/null; do echo "Waiting for SQL Server..."; sleep 5; done' || echo "SQL Server not ready, will use SQLite fallback"
+        timeout 60 bash -c 'until docker exec $(docker ps -q -f "ancestor=mcr.microsoft.com/mssql/server:2022-latest") /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P MyStronger!Passw0rd2025 -Q "SELECT 1" 2>/dev/null; do echo "Waiting for SQL Server..."; sleep 5; done' || echo "SQL Server not ready, will use SQLite fallback"
 
     - name: Run unit tests
       run: dotnet test --no-build --configuration Release --logger "trx;LogFileName=unit-tests.trx" --results-directory TestResults/ --verbosity normal
@@ -162,9 +162,9 @@ jobs:
       run: |
         cd efcore-webapp
         # Try SQL Server first, fallback to SQLite if it fails
-        if docker exec $(docker ps -q -f "ancestor=mcr.microsoft.com/mssql/server:2022-latest") /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Password -Q "SELECT 1" 2>/dev/null; then
+        if docker exec $(docker ps -q -f "ancestor=mcr.microsoft.com/mssql/server:2022-latest") /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P MyStronger!Passw0rd2025 -Q "SELECT 1" 2>/dev/null; then
           echo "Using SQL Server"
-          export ConnectionStrings__DefaultConnection="Server=localhost;Database=MyWebAppDb;User ID=sa;Password=YourStrong@Password;TrustServerCertificate=True;"
+          export ConnectionStrings__DefaultConnection="Server=localhost;Database=MyWebAppDb;User ID=sa;Password=MyStronger!Passw0rd2025;TrustServerCertificate=True;"
         else
           echo "SQL Server not available, using SQLite"
           export ConnectionStrings__DefaultConnection="Data Source=app.db"

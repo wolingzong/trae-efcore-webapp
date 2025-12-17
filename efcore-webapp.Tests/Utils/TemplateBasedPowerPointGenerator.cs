@@ -73,33 +73,70 @@ public static class TemplateBasedPowerPointGenerator
     
     private static void CreateMinimalPresentation(PresentationPart presentationPart, List<ScenarioInfo> scenarios, string testResult, string screenshotPath)
     {
+        // 1. Create Slide Master and Layout (Required by WPS)
+        var slideMasterPart = presentationPart.AddNewPart<SlideMasterPart>();
+        var slideLayoutPart = slideMasterPart.AddNewPart<SlideLayoutPart>();
+        
+        // Setup Master content (minimal but valid)
+        slideMasterPart.SlideMaster = new SlideMaster(
+            new CommonSlideData(new ShapeTree(
+                new P.NonVisualGroupShapeProperties(
+                    new P.NonVisualDrawingProperties { Id = 1U, Name = "" },
+                    new P.NonVisualGroupShapeDrawingProperties(),
+                    new ApplicationNonVisualDrawingProperties()),
+                new GroupShapeProperties(new A.TransformGroup())
+            )),
+            new P.ColorMap { Background1 = A.ColorSchemeIndexValues.Light1, Text1 = A.ColorSchemeIndexValues.Dark1, Background2 = A.ColorSchemeIndexValues.Light2, Text2 = A.ColorSchemeIndexValues.Dark2, Accent1 = A.ColorSchemeIndexValues.Accent1, Accent2 = A.ColorSchemeIndexValues.Accent2, Accent3 = A.ColorSchemeIndexValues.Accent3, Accent4 = A.ColorSchemeIndexValues.Accent4, Accent5 = A.ColorSchemeIndexValues.Accent5, Accent6 = A.ColorSchemeIndexValues.Accent6, Hyperlink = A.ColorSchemeIndexValues.Hyperlink, FollowedHyperlink = A.ColorSchemeIndexValues.FollowedHyperlink },
+            new P.SlideLayoutIdList(new P.SlideLayoutId { Id = 2147483649U, RelationshipId = slideMasterPart.GetIdOfPart(slideLayoutPart) }),
+            new P.TextStyles(
+                new P.TitleStyle(), new P.BodyStyle(), new P.OtherStyle()
+            )
+        );
+
+        // Setup Layout content
+        slideLayoutPart.SlideLayout = new SlideLayout(
+            new CommonSlideData(new ShapeTree(
+                new P.NonVisualGroupShapeProperties(
+                    new P.NonVisualDrawingProperties { Id = 1U, Name = "" },
+                    new P.NonVisualGroupShapeDrawingProperties(),
+                    new ApplicationNonVisualDrawingProperties()),
+                new GroupShapeProperties(new A.TransformGroup())
+            )),
+            new P.ColorMapOverride(new A.MasterColorMapping()));
+
+        // 2. Setup Presentation with Master Reference
         presentationPart.Presentation = new Presentation(
+            new SlideMasterIdList(new SlideMasterId { Id = 2147483648U, RelationshipId = presentationPart.GetIdOfPart(slideMasterPart) }),
             new SlideIdList(),
-            new SlideSize { Cx = 9144000, Cy = 6858000 }
+            new SlideSize { Cx = 9144000, Cy = 6858000 },
+            new NotesSize { Cx = 6858000, Cy = 6858000 },
+            new P.DefaultTextStyle()
         );
         
         var slideIdList = presentationPart.Presentation.SlideIdList!;
         uint slideId = 256U;
         
-        // Create 4 simple slides without master/layout (WPS minimal mode)
-        CreateSimpleSlide(presentationPart, slideIdList, ref slideId, 
+        // 3. Create Slides (Must maintain relationship to Layout)
+        CreateSimpleSlide(presentationPart, slideLayoutPart, slideIdList, ref slideId, 
             $"商品管理システム\nテスト実行報告書\n\n{(testResult == "PASS" ? "✓ テスト合格" : "✗ テスト不合格")}\n{DateTime.Now:yyyy年MM月dd日}");
         
-        CreateSimpleSlide(presentationPart, slideIdList, ref slideId,
+        CreateSimpleSlide(presentationPart, slideLayoutPart, slideIdList, ref slideId,
             $"テスト結果サマリー\n\n総合結果: {(testResult == "PASS" ? "合格" : "不合格")}\n総シナリオ数: {scenarios.Count}\n総ステップ数: {scenarios.Sum(s => s.Steps.Count)}\n\nテスト環境: GitHub Actions\n.NET: 9.0");
         
         if (File.Exists(screenshotPath))
         {
-            CreateImageSlide(presentationPart, slideIdList, ref slideId, "スクリーンショット", screenshotPath);
+            CreateImageSlide(presentationPart, slideLayoutPart, slideIdList, ref slideId, "スクリーンショット", screenshotPath);
         }
         
-        CreateSimpleSlide(presentationPart, slideIdList, ref slideId,
+        CreateSimpleSlide(presentationPart, slideLayoutPart, slideIdList, ref slideId,
             "システム情報\n\n・テスト環境: GitHub Actions (Ubuntu)\n・.NETバージョン: 9.0\n・データベース: SQL Server / SQLite\n・ブラウザ: Chromium\n・実行時間: 約2-3分");
     }
     
-    private static void CreateSimpleSlide(PresentationPart presentationPart, SlideIdList slideIdList, ref uint slideId, string text)
+    private static void CreateSimpleSlide(PresentationPart presentationPart, SlideLayoutPart layoutPart, SlideIdList slideIdList, ref uint slideId, string text)
     {
         var slidePart = presentationPart.AddNewPart<SlidePart>();
+        slidePart.AddPart(layoutPart); // Critical: Link to Layout
+        
         slidePart.Slide = new Slide(
             new CommonSlideData(
                 new ShapeTree(
@@ -130,16 +167,18 @@ public static class TemplateBasedPowerPointGenerator
                         )
                     )
                 )
-            )
+            ),
+            new P.ColorMapOverride(new A.MasterColorMapping())
         );
         
         slideIdList.AppendChild(new SlideId { Id = slideId++, RelationshipId = presentationPart.GetIdOfPart(slidePart) });
         slidePart.Slide.Save();
     }
     
-    private static void CreateImageSlide(PresentationPart presentationPart, SlideIdList slideIdList, ref uint slideId, string title, string imagePath)
+    private static void CreateImageSlide(PresentationPart presentationPart, SlideLayoutPart layoutPart, SlideIdList slideIdList, ref uint slideId, string title, string imagePath)
     {
         var slidePart = presentationPart.AddNewPart<SlidePart>();
+        slidePart.AddPart(layoutPart); // Link to Layout
         
         var shapeTree = new ShapeTree(
             new P.NonVisualGroupShapeProperties(
@@ -200,7 +239,11 @@ public static class TemplateBasedPowerPointGenerator
             // If image fails, just skip it
         }
         
-        slidePart.Slide = new Slide(new CommonSlideData(shapeTree));
+        slidePart.Slide = new Slide(
+            new CommonSlideData(shapeTree),
+            new P.ColorMapOverride(new A.MasterColorMapping())
+        );
+        
         slideIdList.AppendChild(new SlideId { Id = slideId++, RelationshipId = presentationPart.GetIdOfPart(slidePart) });
         slidePart.Slide.Save();
     }

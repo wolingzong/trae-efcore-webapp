@@ -5,12 +5,19 @@ using EfCoreWebApp.Tests.Utils;
 
 namespace EfCoreWebApp.Tests;
 
-public class ProductFeatureTests
+public class ProductFeatureTests : IClassFixture<TestServerFixture>
 {
+    private readonly TestServerFixture _server;
+
+    public ProductFeatureTests(TestServerFixture server)
+    {
+        _server = server;
+    }
+    
     [Fact]
     public async Task 商品一覧画面を見る_ヘッダー表示とPDF保存()
     {
-        var baseUrl = Environment.GetEnvironmentVariable("TEST_BASE_URL") ?? "http://localhost:5000";
+        var baseUrl = _server.BaseUrl;
         var client = new HttpClient { BaseAddress = new Uri(baseUrl) };
 
         var home = await client.GetAsync("/");
@@ -58,8 +65,65 @@ public class ProductFeatureTests
         var vdxFile = Path.Combine(dir, "test-hierarchy.vdx");
         VisioReportGenerator.GenerateDiagram(vdxFile, featureFile);
         
+        // Output as VSDX (OpenXML Package)
+        var vsdxFile = Path.Combine(dir, "test-hierarchy.vsdx");
+        VsdxReportGenerator.GenerateDiagram(vsdxFile, featureFile);
+
+        // Output as Draw.io (mxGraphModel) - Request User Format
+        var drawioFile = Path.Combine(dir, "test-hierarchy.drawio");
+        DrawIoReportGenerator.GenerateDiagram(drawioFile, featureFile);
+        
+        // Output XML (Copy of Draw.io as requested)
+        var xmlFile = Path.Combine(dir, "test-hierarchy.xml");
+        File.Copy(drawioFile, xmlFile, true);
+        
         // 動画記録 (Playwright)
         var videoFile = Path.Combine(dir, "acceptance-test.mp4");
         await VideoRecorder.RecordAcceptanceScenarioAsync(baseUrl, videoFile);
+    }
+
+    [Fact]
+    public void VerifyVsdxIntegrity()
+    {
+        // Setup
+        var featureFile = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "Features", "product_management.feature");
+        var outputDir = Path.Combine(Directory.GetCurrentDirectory(), "TestResults", "IntegrityCheck");
+        Directory.CreateDirectory(outputDir);
+        var vsdxFile = Path.Combine(outputDir, "check.vsdx");
+        
+        // Generate
+        VsdxReportGenerator.GenerateDiagram(vsdxFile, featureFile);
+        
+        // Verify Size
+        var info = new FileInfo(vsdxFile);
+        Assert.True(info.Length > 0, $"VSDX file is empty: {vsdxFile}");
+        
+        // Verify Zip Structure (Attempt Extract)
+        var extractDir = Path.Combine(outputDir, $"extracted_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}");
+        
+        // Ensure clean extraction directory
+        if (Directory.Exists(extractDir))
+        {
+            try
+            {
+                Directory.Delete(extractDir, true);
+            }
+            catch (Exception ex)
+            {
+                Assert.Fail($"Failed to clean extraction directory: {ex.Message}");
+            }
+        }
+        
+        try
+        {
+            System.IO.Compression.ZipFile.ExtractToDirectory(vsdxFile, extractDir);
+        }
+        catch (Exception ex)
+        {
+            Assert.Fail($"Failed to unzip generated VSDX: {ex.Message}");
+        }
+        
+        Assert.True(File.Exists(Path.Combine(extractDir, "[Content_Types].xml")), "Content Types missing");
+        Assert.True(Directory.Exists(Path.Combine(extractDir, "visio")), "visio folder missing");
     }
 }

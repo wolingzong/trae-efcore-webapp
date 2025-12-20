@@ -12,18 +12,29 @@ public static class MermaidDiagramGenerator
         var mermaidCode = GenerateMermaidCode(feature);
         File.WriteAllText(mermaidPath, mermaidCode);
         
-        // Convert to SVG (Visio Compatible) using Playwright
+        // Generate HTML (User requested)
+        var htmlPath = Path.ChangeExtension(mermaidPath, ".html");
+        await GenerateHtmlAsync(mermaidCode, htmlPath);
+        
+        // Convert to SVG and JPG (Visio and Image) using Playwright
+        // We use the generated HTML file as the source
         var svgPath = Path.ChangeExtension(mermaidPath, ".svg");
-        await ConvertToSvgAsync(mermaidCode, svgPath);
+        var jpgPath = Path.ChangeExtension(mermaidPath, ".jpg");
+        await ConvertToArtifactsAsync(htmlPath, svgPath, jpgPath);
     }
     
-    private static async Task ConvertToSvgAsync(string mermaidCode, string svgPath)
+    private static async Task GenerateHtmlAsync(string mermaidCode, string htmlPath)
     {
-        try 
-        {
-            var htmlContent = $@"
+        var htmlContent = $@"
 <!DOCTYPE html>
 <html>
+<head>
+    <meta charset=""UTF-8"">
+    <title>Test Hierarchy Diagram</title>
+    <style>
+        body {{ background-color: white; }} /* Ensure white background for JPG */
+    </style>
+</head>
 <body>
     <div class=""mermaid"">
 {mermaidCode}
@@ -34,33 +45,49 @@ public static class MermaidDiagramGenerator
     </script>
 </body>
 </html>";
-
-            var tempHtmlPath = Path.Combine(Path.GetTempPath(), $"mermaid_{Guid.NewGuid()}.html");
-            File.WriteAllText(tempHtmlPath, htmlContent);
-
+        await File.WriteAllTextAsync(htmlPath, htmlContent);
+    }
+    
+    private static async Task ConvertToArtifactsAsync(string htmlPath, string svgPath, string jpgPath)
+    {
+        try 
+        {
             using var playwright = await Microsoft.Playwright.Playwright.CreateAsync();
             await using var browser = await playwright.Chromium.LaunchAsync(new Microsoft.Playwright.BrowserTypeLaunchOptions { Headless = true });
-            var page = await browser.NewPageAsync();
             
-            await page.GotoAsync($"file://{tempHtmlPath}");
+            // Set a large viewport to ensure everything renders
+            var page = await browser.NewPageAsync(new Microsoft.Playwright.BrowserNewPageOptions
+            {
+                ViewportSize = new Microsoft.Playwright.ViewportSize { Width = 1920, Height = 1080 } 
+            });
             
-            // Wait for mermaid to generate the SVG
+            // Open the local HTML file
+            await page.GotoAsync($"file://{htmlPath}");
+            
+            // Wait for mermaid to generate the SVG and ensure it has dimensions
             await page.WaitForSelectorAsync(".mermaid svg");
             
-            // Extract the SVG content
+            // Small delay to ensure layout is stable (Mermaid sometimes reflows)
+            await page.WaitForTimeoutAsync(1000); 
+
+            // 1. Extract the SVG content
             var svgContent = await page.Locator(".mermaid").InnerHTMLAsync();
+            await File.WriteAllTextAsync(svgPath, svgContent);
             
-            // Clean up the SVG for standalone file (optional but good practice)
-            // Sometimes innerHTML includes the div wrapper or extra stuff, but .mermaid innerHTML usually gives the <svg>...
-            
-            File.WriteAllText(svgPath, svgContent);
-            
-            // Cleanup
-            if (File.Exists(tempHtmlPath)) File.Delete(tempHtmlPath);
+            // 2. Capture JPG Screenshot
+            // We select the mermaid div to take a crop of just the diagram
+            // Ensure background is white for JPG
+            await page.Locator(".mermaid").ScreenshotAsync(new Microsoft.Playwright.LocatorScreenshotOptions
+            {
+                Path = jpgPath,
+                Type = Microsoft.Playwright.ScreenshotType.Jpeg,
+                Quality = 100,
+                OmitBackground = false 
+            });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SVG conversion failed: {ex.Message}");
+            Console.WriteLine($"Diagram conversion failed: {ex.Message}");
         }
     }
     
@@ -114,7 +141,7 @@ public static class MermaidDiagramGenerator
     {
         var sb = new System.Text.StringBuilder();
         
-        sb.AppendLine("```mermaid");
+        // Remove backticks to return pure Mermaid syntax
         sb.AppendLine("graph TD");
         sb.AppendLine($"    Feature[\"{EscapeMermaid(feature.Name)}\"]");
         sb.AppendLine("    ");
@@ -141,10 +168,11 @@ public static class MermaidDiagramGenerator
                     
                     // ステップのタイプによって形を変える
                     var stepType = GetStepType(step);
-                    var stepShape = GetStepShape(stepType);
+                    var stepShapeStart = GetStepShapeStart(stepType);
+                    var stepShapeEnd = GetStepShapeEnd(stepShapeStart);
                     var stepText = TruncateStep(step, 40);
                     
-                    sb.AppendLine($"    {stepId}{stepShape}\"{EscapeMermaid(stepText)}\"{stepShape.Replace("[", "]")}");
+                    sb.AppendLine($"    {stepId}{stepShapeStart}\"{EscapeMermaid(stepText)}\"{stepShapeEnd}");
                     sb.AppendLine($"    {scenarioId} --> {stepId}");
                 }
                 sb.AppendLine();
@@ -175,16 +203,12 @@ public static class MermaidDiagramGenerator
             }
         }
         
-        sb.AppendLine("```");
+        // Convert Legend to Comments (to avoid syntax errors)
         sb.AppendLine();
-        sb.AppendLine("## 凡例");
-        sb.AppendLine();
-        sb.AppendLine("- **青色 (四角)**: 機能 (Feature)");
-        sb.AppendLine("- **緑色 (四角)**: シナリオ (Scenario)");
-        sb.AppendLine("- **オレンジ色 (丸角四角/ひし形/六角形)**: ステップ (Steps)");
-        sb.AppendLine("  - 丸角四角: Given/前提 (事前条件)");
-        sb.AppendLine("  - ひし形: When/もし (アクション)");
-        sb.AppendLine("  - 六角形: Then/ならば (検証)");
+        sb.AppendLine("    %% 凡例");
+        sb.AppendLine("    %% 青色 (四角): 機能 (Feature)");
+        sb.AppendLine("    %% 緑色 (四角): シナリオ (Scenario)");
+        sb.AppendLine("    %% オレンジ色: ステップ (Steps)");
         
         return sb.ToString();
     }
@@ -211,14 +235,26 @@ public static class MermaidDiagramGenerator
         return "and";
     }
     
-    private static string GetStepShape(string stepType)
+    private static string GetStepShapeStart(string stepType)
     {
         return stepType switch
         {
-            "given" => "[",      // 丸角四角
+            "given" => "(",      // 丸角
             "when" => "{",       // ひし形
             "then" => "{{",      // 六角形
-            _ => "["             // デフォルト: 丸角四角
+            _ => "["             // 四角
+        };
+    }
+
+    private static string GetStepShapeEnd(string startShape)
+    {
+        return startShape switch
+        {
+            "(" => ")",
+            "{" => "}",
+            "{{" => "}}",
+            "[" => "]",
+            _ => "]"
         };
     }
     

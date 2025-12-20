@@ -147,6 +147,6 @@ app.MapPost("/api/products", async (Product product, AppDbContext db) =>
     return Results.Created($"/api/products/{product.Id}", product);
 });
 
-app.Run();
+app.Run("http://localhost:5001");
 
 public partial class Program { }

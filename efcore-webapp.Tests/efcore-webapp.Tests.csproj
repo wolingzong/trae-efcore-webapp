@@ -23,4 +23,7 @@
     <Compile Remove="Features\product_management.feature.cs" />
     <Compile Remove="Steps\ProductSteps.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\efcore-webapp\EfCoreWebApp.csproj" />
+  </ItemGroup>
 </Project>
